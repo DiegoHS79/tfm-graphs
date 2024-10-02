@@ -36,14 +36,17 @@ def _load_json_file() -> tuple[Any]:
     return updated_date, user_agents
 
 
-def get_user_agents() -> str:
+def get_user_agent() -> str:
     if Path(BASE_FILE_PATH).exists():
         updated_date, user_agents = _load_json_file()
 
-    substract = date.today() - datetime.strptime(updated_date, DATE_FORMAT).date()
-    if substract.days >= 7:
+        substract = date.today() - datetime.strptime(updated_date, DATE_FORMAT).date()
+        if substract.days >= 7:
+            _user_agents_from_source()
+    else:
         _user_agents_from_source()
-        updated_date, user_agents = _load_json_file()
+
+    updated_date, user_agents = _load_json_file()
 
     return random.choice(user_agents)
 
@@ -51,5 +54,5 @@ def get_user_agents() -> str:
 if "__main__" == __name__:
     os.system("clear")
 
-    user_agent = get_user_agents()
+    user_agent = get_user_agent()
     print(user_agent)
