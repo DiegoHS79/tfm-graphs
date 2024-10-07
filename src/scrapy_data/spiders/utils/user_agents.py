@@ -27,7 +27,7 @@ def _user_agents_from_source() -> None:
         outfile.write(json.dumps(info, indent=4))
 
 
-def _load_json_file() -> tuple[Any]:
+def _load_json_file():
     with open(BASE_FILE_PATH, "r") as openfile:
         json_object = json.load(openfile)
         updated_date = json_object["update_date"]

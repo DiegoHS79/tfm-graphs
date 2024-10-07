@@ -79,11 +79,13 @@ PROVINCIAS = [
     "zaragoza",
 ]
 
-URLS_CENTROS = []
-for prob in PROVINCIAS:
-    URLS_CENTROS.append(
-        f"https://guia-{prob}.portaldeeducacion.es/colegios-institutos-centros-y-estudios/{prob}/index.htm"
-    )
+# URLS_CENTROS = []
+# for prob in PROVINCIAS:
+#     URLS_CENTROS.append(
+#         f"https://guia-{prob}.portaldeeducacion.es/colegios-institutos-centros-y-estudios/{prob}/index.htm"
+#     )
+
+prob = PROVINCIAS[1]
 
 
 class DetallesCentro(Item):
@@ -98,14 +100,16 @@ class DetallesCentro(Item):
 
 class CentroEducacionSpider(CrawlSpider):
     name = "CentrosEducacion"
-    start_urls = [URLS_CENTROS[0]]
+    start_urls = [
+        f"https://guia-{prob}.portaldeeducacion.es/colegios-institutos-centros-y-estudios/{prob}/index.htm"
+    ]
 
     # ?https://docs.scrapy.org/en/latest/topics/feed-exports.html#feed-export-fields
     custom_settings = {
         "USER_AGENT": get_user_agent(),
         "CONCURRENT_REQUEST": 1,
         "FEEDS": {
-            "data/centros_educacion_urls.jsonl": {
+            f"data/{prob}_centros_educacion_urls.jsonl": {
                 "format": "jsonlines",
                 "overwrite": True,
                 "encoding": "utf-8",
