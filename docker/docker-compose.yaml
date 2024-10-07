@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  python-osmnx:
+    image: gboeing/osmnx:v1.9.3
+    container_name: osmnx-tfm
+    tty: true
+    stdin_open: true
+    ports:
+      - 9010:8888
+    volumes:
+      - ../src:/home/jovyan/work:rw
