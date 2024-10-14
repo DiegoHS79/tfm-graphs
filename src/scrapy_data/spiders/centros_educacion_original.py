@@ -1,9 +1,8 @@
-import io
 import os
 import random
 import re
-import requests
 import sys
+import time
 from pathlib import Path
 
 from itemloaders.processors import MapCompose
@@ -12,8 +11,9 @@ import scrapy
 from scrapy.crawler import CrawlerProcess
 from scrapy.item import Field
 from scrapy.item import Item
-from scrapy.spiders import Spider
+from scrapy.spiders import CrawlSpider, Rule
 from scrapy.selector import Selector
+from scrapy.linkextractors import LinkExtractor
 from scrapy.loader import ItemLoader
 
 from utils import get_user_agent, manage_catpcha
@@ -21,108 +21,68 @@ from utils import get_user_agent, manage_catpcha
 os.system("clear")
 
 PROVINCIAS = [
-    "a-coruna",  # 0
-    "albacete",  # 1
-    "alicante",  # 2
-    "almeria",  # 3
-    "arabaalava",  # 4
-    "asturias",  # 5
-    "avila",  # 6
-    "badajoz",  # 7
-    "barcelona",  # 8
-    "bizkaia",  # 9
-    "burgos",  # 10
-    "caceres",  # 11
-    "cadiz",  # 12
-    "cantabria",  # 13
-    "castellon",  # 14
-    "ceuta",  # 15
-    "ciudad-real",  # 16
-    "cordoba",  # 17
-    "cuenca",  # 18
-    "gipuzkoa",  # 19
-    "girona",  # 20
-    "granada",  # 21
-    "guadalajara",  # 22
-    "huelva",  # 23
-    "huesca",  # 24
-    "illes-balears",  # 25
-    "jaen",  # 26
-    "la-rioja",  # 27
-    "las-palmas",  # 28
-    "leon",  # 29
-    "lleida",  # 30
-    "lugo",  # 31
-    "madrid",  # 32
-    "malaga",  # 33
-    "melilla",  # 34
-    "murcia",  # 35
-    "navarra",  # 36
-    "ourense",  # 37
-    "palencia",  # 38
-    "pontevedra",  # 39
-    "salamanca",  # 40
-    "santa-cruz-de-tenerife",  # 41
-    "segovia",  # 42
-    "sevilla",  # 43
-    "soria",  # 44
-    "tarragona",  # 45
-    "teruel",  # 46
-    "toledo",  # 47
-    "valencia",  # 48
-    "valladolid",  # 49
-    "zamora",  # 50
-    "zaragoza",  # 51
+    "a-coruna",
+    "albacete",
+    "alicante",
+    "almeria",
+    "arabaalava",
+    "asturias",
+    "avila",
+    "badajoz",
+    "barcelona",
+    "bizkaia",
+    "burgos",
+    "caceres",
+    "cadiz",
+    "cantabria",
+    "castellon",
+    "ceuta",
+    "ciudad-real",
+    "cordoba",
+    "cuenca",
+    "gipuzkoa",
+    "girona",
+    "granada",
+    "guadalajara",
+    "huelva",
+    "huesca",
+    "illes-balears",
+    "jaen",
+    "la-rioja",
+    "las-palmas",
+    "leon",
+    "lleida",
+    "lugo",
+    "madrid",
+    "malaga",
+    "melilla",
+    "murcia",
+    "navarra",
+    "ourense",
+    "palencia",
+    "pontevedra",
+    "salamanca",
+    "santa-cruz-de-tenerife",
+    "segovia",
+    "sevilla",
+    "soria",
+    "tarragona",
+    "teruel",
+    "toledo",
+    "valencia",
+    "valladolid",
+    "zamora",
+    "zaragoza",
 ]
 
-prob = PROVINCIAS[51]
+URLS_CENTROS = []
+for prob in PROVINCIAS:
+    URLS_CENTROS.append(
+        f"https://guia-{prob}.portaldeeducacion.es/colegios-institutos-centros-y-estudios/{prob}/index.htm"
+    )
 
-df = pd.read_json(f"data/{prob}_centros_educacion_urls.jsonl", lines=True)
-df = df.map(lambda x: x[0] if isinstance(x, list) else x)
-
-df_detalle = pd.read_json("data/centros_educacion_info.jsonl", lines=True)
-if df_detalle.empty:
-    rest_urls = df.url.to_list()
-else:
-    list_urls = df_detalle.attr_url.apply(
-        lambda x: x[0]
-        .replace("%C2%A0", " ")
-        .replace("%C2%BA", "º")
-        .replace("%C2%B7", "·")
-        .replace("%C3%8C", "Ì")
-        .replace("%C3%8F", "Ï")
-        .replace("%C3%80", "À")
-        .replace("%C3%84", "Ä")
-        .replace("%C3%87", "Ç")
-        .replace("%C3%88", "È")
-        .replace("%C3%92", "Ò")
-        .replace("%C3%94", "Ô")
-        .replace("%C3%96", "Ö")
-        .replace("%C3%99", "Ù")
-        .replace("%C3%B2", "ò")
-        .replace("%C3%A0", "à")
-        .replace("%C3%A7", "ç")
-        .replace("%C3%A8", "è")
-        .replace("%C3%AF", "ï")
-        .replace("%7", "|")
-        .replace("%60", "`")
-    ).to_list()
-
-    all_urls = df.url.to_list()
-
-    rest_urls = set(all_urls).difference(set(list_urls))
-
-    print(f"Hay recogidos: {len(list_urls)}, quedan {len(rest_urls)}")
-
-
-# url = "https://proxylist.geonode.com/api/proxy-list?limit=500&page=1&sort_by=lastChecked&sort_type=desc"
-# response = requests.get(url)
-
-# df2 = pd.read_json(io.StringIO(response.content.decode("utf-8")))
-# PROXIES = []
-# for dat in df2.data:
-#     connection = dict(dat)
-#     PROXIES.append(f"{connection['ip']}:{connection['port']}")
+# df = pd.read_csv("data/proxies.csv")
+# PROXIES = df["IP"].to_list()
 
 
 class DetallesCentro(Item):
@@ -147,9 +107,8 @@ class DetallesCentro(Item):
     longitude = Field()
 
 
-class CentroEducacionSpider(Spider):
-    name = "CentrosEducacionScrap"
-    start_urls = list(rest_urls)
+class CentroEducacionSpider(CrawlSpider):
+    name = "CentrosEducacion"
 
     # ?https://docs.scrapy.org/en/latest/topics/feed-exports.html#feed-export-fields
     custom_settings = {
@@ -158,47 +117,76 @@ class CentroEducacionSpider(Spider):
         # "CLOSESPIDER_PAGECOUNT": 20,
         # profundidad de las reglas.
         # "DEPTH_LIMIT": 1,
-        "FEEDS": {
-            "data/centros_educacion_info.jsonl": {
-                "format": "jsonlines",
-                "overwrite": False,
-                "encoding": "utf-8",
-                "fields": [
-                    "attr_url",
-                    "attr_name",
-                    "attr_type",
-                    "attr_type_description",
-                    "attr_comedor",
-                    "attr_horario_ampliado",
-                    "attr_transporte",
-                    "attr_multi_lengua",
-                    "attr_telephone",
-                    "attr_fax",
-                    "attr_mail",
-                    "attr_cursos",
-                    "attr_webpage",
-                    "city",
-                    "address",
-                    "province",
-                    "latitude",
-                    "longitude",
-                ],
-            },
-        },
-        # numero de paginas que se pueden visitar a la vez.
-        "CONCURRENT_REQUEST": 1,
+        # para los caracteres especiales.
+        "FEED_EXPORT_ENCODING": "utf-8",
+        "FEED_EXPORT_FIELDS": [
+            "attr_url",
+            "attr_name",
+            "attr_type",
+            "attr_type_description",
+            "attr_comedor",
+            "attr_horario_ampliado",
+            "attr_transporte",
+            "attr_multi_lengua",
+            "attr_telephone",
+            "attr_fax",
+            "attr_mail",
+            "attr_cursos",
+            "attr_webpage",
+            "city",
+            "address",
+            "province",
+            "latitude",
+            "longitude",
+        ],
+        "CONCURRENT_REQUEST": 1,  # numero de paginas que se pueden visitar a la vez.
     }
+    # scrapy no toma este valor fijo, sino que pone un rango entre 0.5 * download_delay y 1.5 * download_delay
     download_delay = 2 + random.random()
+    # allowed_domains = []
+    rules = (
+        # Regla para Paginacion
+        Rule(
+            LinkExtractor(allow=r"/index-"),
+            follow=True,
+            # callback="parse_horizontal",
+        ),
+        # Regla para Profundidad
+        Rule(
+            # https://docs.scrapy.org/en/latest/topics/link-extractors.html#module-scrapy.linkextractors.lxmlhtml
+            # LinkExtractor solo busca en tags "a"
+            LinkExtractor(
+                allow=r"\-i[0-9]+\.htm",
+                # para buscar en los tags que tu quieras y con los attrs
+                # tags=("a", "button")
+                # attrs=("href", "data-url")
+                # para restringir determinados elementos (tags)
+                # restrict_css=(),
+            ),
+            follow=True,
+            callback="parse_individual",
+        ),
+    )
+
+    def __init__(self, **kwargs):
+        self.start_urls = [URLS_CENTROS[0]]
+        super().__init__(**kwargs)  # python3
 
     # def start_requests(self):
     #     for url in self.start_urls:
     #         proxy = random.choice(PROXIES)
-
     #         yield scrapy.Request(url, meta={"proxy": f"http://{proxy}"})
 
-    def parse(self, response):
+    def parse_individual(self, response):
         print("*" * 150)
         print("*" * 150)
+        print("Ok!!!!! - 3")
+        try:
+            if sel.css("#MainContent_EnviarLink").get():
+                input()
+                time.sleep(random.uniform(8, 10))
+        except Exception as e:
+            print(e)
 
         item = ItemLoader(DetallesCentro(), response)
         item.add_value("attr_url", response.url)
@@ -284,11 +272,7 @@ class CentroEducacionSpider(Spider):
         item.add_value("attr_type_description", type_descript)
 
         lat_long = description.css("h4 a::attr(href)").get()
-        try:
-            lat, long = re.findall("[+-]?[0-9]+\.[0-9]+", lat_long)
-        except Exception as e:
-            print(e)
-            lat, long = "0.0", "0.0"
+        lat, long = re.findall("[+-]?[0-9]+\.[0-9]+", lat_long)
         item.add_value("latitude", lat)
         item.add_value("longitude", long)
 
@@ -296,11 +280,19 @@ class CentroEducacionSpider(Spider):
         item.add_value("attr_webpage", web)
 
         yield item.load_item()
-
         print("*" * 150)
         print("*" * 150)
 
 
-process = CrawlerProcess()
-process.crawl(CentroEducacionSpider)
-process.start()
+if __name__ == "__main__":
+    df = pd.read_json("data/centros_educacion_urls.jsonl", lines=True)
+    df = df.map(lambda x: x[0] if isinstance(x, list) else x)
+    print(df)
+    # process = CrawlerProcess(
+    #     {
+    #         "FEED_FORMAT": "json",
+    #         "FEED_URI": "data/centros_educacion.json",
+    #     }
+    # )
+    # process.crawl(CentroEducacionSpider)
+    # process.start()

@@ -5,15 +5,12 @@ import sys
 import time
 from pathlib import Path
 
-from itemloaders.processors import MapCompose
 import pandas as pd
-import scrapy
 from scrapy.crawler import CrawlerProcess
 from scrapy.item import Field
 from scrapy.item import Item
-from scrapy.spiders import CrawlSpider, Rule
+from scrapy.spiders import Spider
 from scrapy.selector import Selector
-from scrapy.linkextractors import LinkExtractor
 from scrapy.loader import ItemLoader
 
 from utils import get_user_agent, manage_catpcha
@@ -24,68 +21,29 @@ os.system("clear")
 # if data_centros.exists():
 #     data_centros.unlink()
 
-PROVINCIAS = [
-    "a-coruna",  # 0
-    "albacete",  # 1
-    "alicante",  # 2
-    "almeria",  # 3
-    "arabaalava",  # 4
-    "asturias",  # 5
-    "avila",  # 6
-    "badajoz",  # 7
-    "barcelona",  # 8 - 318
-    "bizkaia",  # 9
-    "burgos",  # 10
-    "caceres",  # 11
-    "cadiz",  # 12
-    "cantabria",  # 13
-    "castellon",  # 14
-    "ceuta",  # 15
-    "ciudad-real",  # 16
-    "cordoba",  # 17
-    "cuenca",  # 18
-    "gipuzkoa",  # 19
-    "girona",  # 20
-    "granada",  # 21
-    "guadalajara",  # 22
-    "huelva",  # 23
-    "huesca",  # 24
-    "illes-balears",  # 25
-    "jaen",  # 26
-    "la-rioja",  # 27
-    "las-palmas",  # 28
-    "leon",  # 29
-    "lleida",  # 30
-    "lugo",  # 31
-    "madrid",  # 32 - 317
-    "malaga",  # 33
-    "melilla",  # 34
-    "murcia",  # 35
-    "navarra",  # 36
-    "ourense",  # 37
-    "palencia",  # 38
-    "pontevedra",  # 39
-    "salamanca",  # 40
-    "santa-cruz-de-tenerife",  # 41
-    "segovia",  # 42
-    "sevilla",  # 43
-    "soria",  # 44
-    "tarragona",  # 45
-    "teruel",  # 46
-    "toledo",  # 47
-    "valencia",  # 48 - 141
-    "valladolid",  # 49
-    "zamora",  # 50
-    "zaragoza",  # 51
+PROVINCIAS = {
+    "barcelona": 318,  # 0
+    "madrid": 317,  # 1
+    "valencia": 141,  # 2
+}
+prob = list(PROVINCIAS.keys())[0]
+
+URLS = [
+    f"https://guia-{prob}.portaldeeducacion.es/colegios-institutos-centros-y-estudios/{prob}/index.htm"
 ]
+for page in range(2, PROVINCIAS[prob] + 1):
+    URLS.append(
+        f"https://guia-{prob}.portaldeeducacion.es/colegios-institutos-centros-y-estudios/{prob}/index-{page}.htm"
+    )
+try:
+    df = pd.read_json(f"data/{prob}_centros_educacion_urls.jsonl", lines=True)
+    df = df.map(lambda x: x[0] if isinstance(x, list) else x)
 
-# URLS_CENTROS = []
-# for prob in PROVINCIAS:
-#     URLS_CENTROS.append(
-#         f"https://guia-{prob}.portaldeeducacion.es/colegios-institutos-centros-y-estudios/{prob}/index.htm"
-#     )
+    all_urls = df.url_base.unique()
 
-prob = PROVINCIAS[48]
+    rest_urls = sorted(set(URLS).difference(set(all_urls)))
+except ValueError:
+    rest_urls = URLS
 
 
 class DetallesCentro(Item):
@@ -96,13 +54,12 @@ class DetallesCentro(Item):
     centre_name = Field()
     centre_description = Field()
     telephone = Field()
+    url_base = Field()
 
 
-class CentroEducacionSpider(CrawlSpider):
+class CentroEducacionSpider(Spider):
     name = "CentrosEducacion"
-    start_urls = [
-        f"https://guia-{prob}.portaldeeducacion.es/colegios-institutos-centros-y-estudios/{prob}/index.htm"
-    ]
+    start_urls = list(rest_urls)
 
     # ?https://docs.scrapy.org/en/latest/topics/feed-exports.html#feed-export-fields
     custom_settings = {
@@ -111,7 +68,7 @@ class CentroEducacionSpider(CrawlSpider):
         "FEEDS": {
             f"data/{prob}_centros_educacion_urls.jsonl": {
                 "format": "jsonlines",
-                "overwrite": True,
+                "overwrite": False,
                 "encoding": "utf-8",
                 "fields": [
                     "url",
@@ -121,23 +78,16 @@ class CentroEducacionSpider(CrawlSpider):
                     "centre_name",
                     "centre_description",
                     "telephone",
+                    "url_base",
                 ],
             },
         },
     }
     download_delay = 2 + random.random()
     # allowed_domains = []
-    rules = (
-        # Regla para Paginacion
-        Rule(
-            LinkExtractor(allow=r"/index-"),
-            follow=True,
-            callback="parse_horizontal",
-        ),
-    )
 
     # para hacer el scrapy de la URL raiz.
-    def parse_horizontal(self, response):
+    def parse(self, response):
         print("*" * 150)
         print("*" * 150)
 
@@ -183,6 +133,8 @@ class CentroEducacionSpider(CrawlSpider):
                 item.add_value("telephone", tel.replace("Teléfono:", "").strip("\r\n "))
             else:
                 continue
+
+            item.add_value("url_base", response.url)
 
             yield item.load_item()
 
