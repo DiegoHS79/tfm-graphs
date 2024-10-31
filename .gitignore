@@ -166,8 +166,12 @@ cython_debug/
 *.xml
 *.json*
 *.csv
+*.CSV
 *.xlsx
 *.html
-*.kml
+mysql
+mongo
+db.opt
+ib*
 osmnx
 textos

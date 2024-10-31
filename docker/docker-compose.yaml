@@ -9,3 +9,45 @@ services:
       - 9010:8888
     volumes:
       - ../src:/home/jovyan/work:rw
+  # mysql:
+  #   # profiles: [ integrations, mysql ]
+  #   image: mysql/mysql-server:5.7
+  #   container_name: mysql-server
+  #   tty: true
+  #   stdin_open: true
+  #   environment:
+  #     # - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+  #     # - MYSQL_ROOT_HOST=%
+  #     # - MYSQL_DATABASE=db1
+  #     - MYSQL_USER=user
+  #     - MYSQL_PASSWORD=password
+  #     - MYSQL_ROOT_PASSWORD=password
+  #   ports:
+  #     - "3306:3306"
+  #   expose:
+  #     - "3306"
+  #   volumes:
+  #     - ../src/mysql:/var/lib/mysql
+
+  # docker exec -it -u root mongo-tfm mongosh
+  mongo:
+    image: mongo:latest
+    container_name: mongo-tfm
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - 27017:27017
+    volumes:
+      - ../src/mongo:/data/db
+
+  mongo-express:
+    image: mongo-express
+    container_name: mongo-express-tfm
+    restart: always
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_URL: "mongodb://root:password@mongo-tfm:27017/"
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: password
