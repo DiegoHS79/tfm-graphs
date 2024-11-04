@@ -80,7 +80,7 @@ class MongoDBConnect:
             resp = input(f"\nDo you really want to delete '{name}' collection (y/n)? ")
             if resp.lower() == "y":
                 collection.drop()
-                print(f"INFO - {name} collection loaded.")
+                print(f"INFO - '{name}' collection loaded.")
             else:
                 print("INFO - Aborted deletion!!!!")
                 return collection
@@ -113,8 +113,9 @@ class MongoDBConnect:
         """
 
         if query == "all" and isinstance(collection, Collection):
-            for c in collection.find({}):
-                print(c)
+            print(len(list(collection.find({}))))
+            # for c in collection.find({}):
+            #     print(c)
         else:
             print(f"WARNING - The operation couldn't be done.")
 
