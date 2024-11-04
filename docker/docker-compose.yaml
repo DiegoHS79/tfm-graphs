@@ -9,6 +9,16 @@ services:
       - 9010:8888
     volumes:
       - ../src:/home/jovyan/work:rw
+
+  python-geo-analysis:
+    image: gboeing/osmnx:v1.9.3
+    container_name: pysal-tfm
+    tty: true
+    stdin_open: true
+    ports:
+      - 9011:8888
+    volumes:
+      - ../src:/home/jovyan/work:rw
   # mysql:
   #   # profiles: [ integrations, mysql ]
   #   image: mysql/mysql-server:5.7
