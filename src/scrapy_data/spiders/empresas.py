@@ -127,6 +127,15 @@ def read_large_json(file_name: Path, chunk: int = 100000):
         yield chunk
 
 
+# creamos los chunks para poder trabajar mejor
+if 0:
+    for i, df_urls in enumerate(read_large_json(EMPRESAS_JSON)):
+        EMPRESAS_CSV = Path(f"data/empresas/empresas_{i}.csv")
+        print(EMPRESAS_CSV)
+        df_urls = df_urls.map(lambda x: x[0], na_action="ignore")
+        df_urls.to_csv(EMPRESAS_CSV, index=False, sep="\t")
+
+
 class DetallesEmpresa2(Item):
     url = Field()
     name = Field()
@@ -144,188 +153,200 @@ class DetallesEmpresa2(Item):
     sic = Field()
 
 
-EMPRESAS_INFO = Path("data/empresas.jsonl")
 df_prox = pd.read_csv("utils/proxies.csv", sep=",")
 proxies = df_prox.ip.apply(lambda x: x + ":") + df_prox.port.astype("str")
 
 
-class EmpresasSpider2(Spider):
-    name = "Empresas"
-    custom_settings = {
-        "USER_AGENT": get_user_agent(),
-        "COOKIES_ENABLED": False,
-        # "RETRY_TIMES": 3,
-        # "RETRY_HTTP_CODES": [500, 503, 504, 400, 403, 404, 408],
-        "CONCURRENT_REQUEST": 1,
-        # "DOWNLOADER_MIDDLEWARES": {
-        #     "rotating_proxies.middlewares.RotatingProxyMiddleware": 610,
-        #     "rotating_proxies.middlewares.BanDetectionMiddleware": 620,
-        # },
-        # "ROTATING_PROXY_LIST": proxies.to_list(),
-        "FEEDS": {
-            EMPRESAS_INFO: {
-                "format": "jsonlines",
-                "overwrite": False,
-                "encoding": "utf-8",
-                "fields": [
-                    "url",
-                    "name",
-                    "address",
-                    "cp",
-                    "city",
-                    "province",
-                    "telephone",
-                    "cif",
-                    "forma",
-                    "cnae",
-                    "sic",
-                ],
-            },
-        },
-        "DOWNLOAD_DELAY": 3,
-        # "RANDOMIZE_DOWNLOAD_DELAY": True,
-        # "AUTOTHROTTLE_ENABLED": True,
-        # "ROBOTSTXT_OBEY": True,  # obedecer la reglas de robots de la p'agina destino
-    }
-    # download_delay = 3 + random.random()
-    allowed_domains = ["axesor.es"]
+if 1:
+    for i in range(43):
+        if i in [0]:
+            continue
+        EMPRESAS_CSV = Path(f"data/empresas/empresas_{i}.csv")
+        df_urls = pd.read_csv(EMPRESAS_CSV, sep="\t")
+        EMPRESAS_INFO = Path(f"data/empresas/empresas_{i}.jsonl")
 
-    def __init__(self, urls, **kwargs):
-        self.start_urls = urls
-        super().__init__(**kwargs)
+        class EmpresasSpider2(Spider):
+            name = "Empresas"
+            custom_settings = {
+                "USER_AGENT": get_user_agent(),
+                "COOKIES_ENABLED": False,
+                # "RETRY_TIMES": 3,
+                # "RETRY_HTTP_CODES": [500, 503, 504, 400, 403, 404, 408],
+                "CONCURRENT_REQUEST": 1,
+                # "DOWNLOADER_MIDDLEWARES": {
+                #     "rotating_proxies.middlewares.RotatingProxyMiddleware": 610,
+                #     "rotating_proxies.middlewares.BanDetectionMiddleware": 620,
+                # },
+                # "ROTATING_PROXY_LIST": proxies.to_list(),
+                "FEEDS": {
+                    EMPRESAS_INFO: {
+                        "format": "jsonlines",
+                        "overwrite": False,
+                        "encoding": "utf-8",
+                        "fields": [
+                            "url",
+                            "name",
+                            "address",
+                            "cp",
+                            "city",
+                            "province",
+                            "telephone",
+                            "cif",
+                            "forma",
+                            "cnae",
+                            "sic",
+                        ],
+                    },
+                },
+                "DOWNLOAD_DELAY": 3,
+                # "RANDOMIZE_DOWNLOAD_DELAY": True,
+                # "AUTOTHROTTLE_ENABLED": True,
+                # "ROBOTSTXT_OBEY": True,  # obedecer la reglas de robots de la p'agina destino
+            }
+            # download_delay = 3 + random.random()
+            allowed_domains = ["axesor.es"]
 
-    def parse(self, response):
-        print("*" * 150)
-        print("*" * 150)
-        item = ItemLoader(DetallesEmpresa2(), response)
-        item.add_value("url", response.url)
-        sel = Selector(response)
+            def __init__(self, urls, **kwargs):
+                self.start_urls = urls
+                super().__init__(**kwargs)
 
-        nombre = sel.css("table#tablaInformacionGeneral tbody tr h3::text").get()
-        item.add_value(
-            "name",
-            nombre,
-            MapCompose(lambda x: x.replace("\n", "").strip().lower()),
-        )
+            def parse(self, response):
+                print("*" * 150)
+                print("*" * 150)
+                item = ItemLoader(DetallesEmpresa2(), response)
+                item.add_value("url", response.url)
+                sel = Selector(response)
 
-        direc = sel.css(
-            "table#tablaInformacionGeneral tbody tr td#Direccion + td span > span"
-        )
-        if len(direc) == 0:
-            direc = sel.css(
-                "table#tablaInformacionGeneral tbody tr td#Direccion + td span"
-            )
-        for i, anot in enumerate(direc):
-            if i == 0:
+                nombre = sel.css(
+                    "table#tablaInformacionGeneral tbody tr h3::text"
+                ).get()
                 item.add_value(
-                    "address",
-                    anot.css("span::text").get(),
+                    "name",
+                    nombre,
                     MapCompose(lambda x: x.replace("\n", "").strip().lower()),
                 )
-            elif i == 1:
-                item.add_value(
-                    "cp",
-                    anot.css("span::text").get(),
-                    MapCompose(lambda x: x.replace("\n", "").strip(" ,").lower()),
-                )
-            elif i == 2:
-                item.add_value(
-                    "city",
-                    anot.css("span::text").get(),
-                    MapCompose(lambda x: x.replace("\n", "").strip(" ,").lower()),
-                )
-            elif i == 3:
-                item.add_value(
-                    "province",
-                    anot.css("span::text").get(),
-                    MapCompose(lambda x: x.replace("\n", "").strip(" ,").lower()),
-                )
 
-        tel = sel.css(
-            "table#tablaInformacionGeneral tbody tr td#Telefono + td::text"
-        ).get()
-        item.add_value(
-            "telephone",
-            tel,
-            MapCompose(lambda x: x.replace("&nbsp", "").strip().lower()),
-        )
-
-        trs = sel.css("table#tablaInformacionGeneral tbody tr")
-        for tr in trs:
-            save_cif = False
-            save_forma = False
-            save_cnae = False
-            save_sic = False
-            for j, td in enumerate(tr.css("td")):
-                text = td.css("td::text").get()
-                if text is None:
-                    text = td.css("td span::text").get()
-                if text == "CIF:":
-                    save_cif = True
-                elif text == "Forma jurídica:":
-                    save_forma = True
-                elif text == "CNAE:":
-                    save_cnae = True
-                elif text == "SIC:":
-                    save_sic = True
-
-                if save_cif and j == 1:
-                    item.add_value(
-                        "cif",
-                        text,
-                        MapCompose(lambda x: x.strip().lower()),
+                direc = sel.css(
+                    "table#tablaInformacionGeneral tbody tr td#Direccion + td span > span"
+                )
+                if len(direc) == 0:
+                    direc = sel.css(
+                        "table#tablaInformacionGeneral tbody tr td#Direccion + td span"
                     )
+                for i, anot in enumerate(direc):
+                    if i == 0:
+                        item.add_value(
+                            "address",
+                            anot.css("span::text").get(),
+                            MapCompose(lambda x: x.replace("\n", "").strip().lower()),
+                        )
+                    elif i == 1:
+                        item.add_value(
+                            "cp",
+                            anot.css("span::text").get(),
+                            MapCompose(
+                                lambda x: x.replace("\n", "").strip(" ,").lower()
+                            ),
+                        )
+                    elif i == 2:
+                        item.add_value(
+                            "city",
+                            anot.css("span::text").get(),
+                            MapCompose(
+                                lambda x: x.replace("\n", "").strip(" ,").lower()
+                            ),
+                        )
+                    elif i == 3:
+                        item.add_value(
+                            "province",
+                            anot.css("span::text").get(),
+                            MapCompose(
+                                lambda x: x.replace("\n", "").strip(" ,").lower()
+                            ),
+                        )
+
+                tel = sel.css(
+                    "table#tablaInformacionGeneral tbody tr td#Telefono + td::text"
+                ).get()
+                item.add_value(
+                    "telephone",
+                    tel,
+                    MapCompose(lambda x: x.replace("&nbsp", "").strip().lower()),
+                )
+
+                trs = sel.css("table#tablaInformacionGeneral tbody tr")
+                for tr in trs:
                     save_cif = False
-                elif save_forma and j == 1:
-                    item.add_value(
-                        "forma",
-                        text,
-                        MapCompose(lambda x: x.strip().lower()),
-                    )
                     save_forma = False
-                elif save_cnae and j == 1:
-                    item.add_value(
-                        "cnae",
-                        text,
-                        MapCompose(lambda x: x.replace("\n", "").strip().lower()),
-                    )
                     save_cnae = False
-                elif save_sic and j == 1:
-                    item.add_value(
-                        "sic",
-                        text,
-                        MapCompose(lambda x: x.replace("\n", "").strip().lower()),
-                    )
                     save_sic = False
+                    for j, td in enumerate(tr.css("td")):
+                        text = td.css("td::text").get()
+                        if text is None:
+                            text = td.css("td span::text").get()
+                        if text == "CIF:":
+                            save_cif = True
+                        elif text == "Forma jurídica:":
+                            save_forma = True
+                        elif text == "CNAE:":
+                            save_cnae = True
+                        elif text == "SIC:":
+                            save_sic = True
 
-        yield item.load_item()
+                        if save_cif and j == 1:
+                            item.add_value(
+                                "cif",
+                                text,
+                                MapCompose(lambda x: x.strip().lower()),
+                            )
+                            save_cif = False
+                        elif save_forma and j == 1:
+                            item.add_value(
+                                "forma",
+                                text,
+                                MapCompose(lambda x: x.strip().lower()),
+                            )
+                            save_forma = False
+                        elif save_cnae and j == 1:
+                            item.add_value(
+                                "cnae",
+                                text,
+                                MapCompose(
+                                    lambda x: x.replace("\n", "").strip().lower()
+                                ),
+                            )
+                            save_cnae = False
+                        elif save_sic and j == 1:
+                            item.add_value(
+                                "sic",
+                                text,
+                                MapCompose(
+                                    lambda x: x.replace("\n", "").strip().lower()
+                                ),
+                            )
+                            save_sic = False
 
+                yield item.load_item()
 
-if 1:
-    for df_urls in read_large_json(EMPRESAS_JSON):
-        df_urls = df_urls.map(lambda x: x[0], na_action="ignore")
         if not EMPRESAS_INFO.exists():
             urls_rest = df_urls.url.apply(lambda x: f"https:{x}").to_list()
 
         else:
-            for df_def in read_large_json(EMPRESAS_INFO):
-                urls_all = set(df_urls.url.apply(lambda x: f"https:{x}").to_list())
-                print(f"todos: {len(urls_all)}")
-                # print(urls_all)
-                urls_def = set(df_def.url.apply(lambda x: x[0]).to_list())
-                print(f"hay: {len(urls_def)}")
-                # print(urls_def)
-                urls_rest = list(set(urls_all).difference(set(urls_def)))
-                print(f"quedan: {len(urls_rest)}")
+            # cambiar el numero del archivo al que corresponda
+            # for df_def in pd.read_json(EMPRESAS_INFO, lines=True):
 
-        # break
-
-        # print(urls_rest)
+            urls_all = set(df_urls.url.apply(lambda x: f"https:{x}").to_list())
+            print(f"todos: {len(urls_all)}")
+            # print(urls_all)
+            df_def = pd.read_json(EMPRESAS_INFO, lines=True)
+            urls_def = set(df_def.url.apply(lambda x: x[0]).to_list())
+            print(f"hay: {len(urls_def)}")
+            # print(urls_def)
+            urls_rest = list(set(urls_all).difference(set(urls_def)))
+            print(f"quedan: {len(urls_rest)}")
 
         process = CrawlerProcess()
         process.crawl(EmpresasSpider2, urls=urls_rest)
         process.start()
 
         break
-
-EMPRESAS_CSV = "data/empresas.csv"
