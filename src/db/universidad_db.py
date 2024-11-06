@@ -38,9 +38,35 @@ else:
 
 def normalize_data(sf: Series) -> dict:
     # print("*" * 200)
-    # print(sf)
-    prov = sf.loc["province"]
-    if prov == "alicante":
+    # [A-zÀ-ú] // accepts lowercase and uppercase characters
+    # [A-zÀ-ÿ] // as above, but including letters with an umlaut (includes [ ] ^ \ × ÷)
+    # [A-Za-zÀ-ÿ] // as above but not including [ ] ^ \
+    # [A-Za-zÀ-ÖØ-öø-ÿ] // as above, but not including [ ] ^ \ × ÷
+    direction = sf.address.lower()
+    prov0 = re.findall("\(.*\)", direction)
+    if not prov0:
+        prov = None
+    else:
+        prov = prov0[0].strip("()")
+    sf.loc["province"] = prov
+
+    city0 = re.findall("[a-zà-ú ]+", direction.split(",")[-1])
+    if not city0:
+        city = None
+    else:
+        city = city0[-2].strip()
+    sf.loc["city"] = city
+
+    cp0 = re.findall("cp \d+", direction)
+    if not cp0:
+        cp = None
+    else:
+        cp = cp0[0].replace("cp ", "")
+    sf.loc["cp"] = cp
+
+    if prov == "santander":
+        prov = "cantabria"
+    elif prov == "alicante":
         prov = "alicante/alacant"
     elif prov == "araba/álava":
         prov = "álava"
@@ -52,89 +78,56 @@ def normalize_data(sf: Series) -> dict:
         prov = "guipúzcoa"
     elif prov == "valencia":
         prov = "valencia/valència"
+    elif not prov:
+        prov = "zaragoza"
 
     max_coor = df_max.loc[[prov]].to_dict()
     min_coor = df_min.loc[[prov]].to_dict()
     lat_edges = (max_coor["Latitud"][prov], min_coor["Latitud"][prov])
     lon_edges = (max_coor["Longitud"][prov], min_coor["Longitud"][prov])
 
-    retake_coords = False
-    take_count = 0
-    for ind in sf.index:
-        if ind in [
-            "attr_type_description",
-            "attr_cursos",
-            "attr_telephone",
-            "attr_fax",
-        ] and isinstance(sf.loc[ind], float):
-            continue
-        if ind in ["attr_type_description", "attr_cursos"]:
-            sf.loc[ind] = eval(sf.loc[ind].replace("\\xa0", ""))
-        elif ind in ["attr_telephone", "attr_fax"] and len(sf.loc[ind].strip()) > 8:
-            number = re.findall("\d+", sf.loc[ind].strip())[0]
-            sf.loc[ind] = ast.literal_eval(number)
-        elif ind == "latitude":
-            lat = sf.loc[ind]
-            if lat > ceil(lat_edges[0]) or lat < floor(lat_edges[1]):
-                retake_coords = True
-                take_count += 1
-        elif ind == "longitude":
-            lon = sf.loc[ind]
-            if (
-                lon > ceil(lon_edges[0]) or lon < floor(lon_edges[1])
-            ) and take_count == 0:
-                retake_coords = True
+    tel = sf.loc["telephone"]
+    if "/" in tel:
+        tel = tel.split("/")[0]
+    sf.loc["telephone"] = ast.literal_eval(tel)
 
-        if retake_coords:
-            print("-" * 100)
-            print(
-                f"INFO - coordenadas incorrectas: ({sf.loc['latitude']}, {sf.loc['longitude']})"
-            )
-            print(
-                f"\tdireccion: {', '.join([sf.loc['address'], sf.loc['city'], sf.loc['province']])}"
-            )
-            direccion = ", ".join(
-                [sf.loc["address"], sf.loc["city"], sf.loc["province"]]
-            )
-            resp = get_coordinates(direccion, lat_edges=lat_edges, long_edges=lon_edges)
+    print("-" * 100)
+    print(f"\tdireccion: {sf.loc['address']}")
+    resp = get_coordinates(sf.loc["address"], lat_edges=lat_edges, long_edges=lon_edges)
 
-            print(f"INFO - nuevas coordenadas: {resp}")
+    print(f"INFO - nuevas coordenadas: {resp}")
 
-            time.sleep(1.5 + random.random())
-
-            retake_coords = False
+    sf.loc["latitude"] = resp[0]
+    sf.loc["longitude"] = resp[1]
 
     return sf.to_dict()
 
-    # print()
-    # for ind in sf.index:
-    #     print(ind, sf.loc[ind], type(sf.loc[ind]), sep=" : ")
 
-
-CENTROS = Path("../scrapy_data/spiders/data/centros_educacion_info_final.csv")
-CENTROS_FINAL = Path("data/centros_educacion.csv")
-if not CENTROS_FINAL.exists():
-    df = pd.read_csv(CENTROS, sep="\t")
+UNIVERSIDADES = Path("../scrapy_data/spiders/data/centros_educacion_universidades.csv")
+UNIVERSIDADES_FINAL = Path("data/universidades.csv")
+if not UNIVERSIDADES_FINAL.exists():
+    df = pd.read_csv(UNIVERSIDADES, sep="\t")
     for i in range(df.shape[0]):
         print(f"{i} - ", end="")
         document = normalize_data(df.iloc[i, :])
+        # break
         if i == 0:
             df_final = pd.DataFrame.from_dict(document, orient="index").T
         elif i > 0:
             new_row = pd.DataFrame.from_dict(document, orient="index").T
             df_final = pd.concat([df_final, new_row])
 
-    df_final.to_csv(CENTROS_FINAL, index=False, sep="\t")
+    df_final.to_csv(UNIVERSIDADES_FINAL, index=False, sep="\t")
 
 
-if CENTROS_FINAL.exists:
+if UNIVERSIDADES_FINAL.exists:
     conn = MongoDBConnect(container_name="mongo-tfm", database="tfm-data")
     col = conn.collection(
-        name="education",
+        name="unversidades",
         mode="create",
         # delete=True,
     )
-    df_tmp = pd.read_csv(CENTROS_FINAL, sep="\t")
+    df_tmp = pd.read_csv(UNIVERSIDADES_FINAL, sep="\t")
     for j in range(df_tmp.shape[0]):
         document = df_tmp.iloc[j, :].to_dict()
         conn.insert(collection=col, data=document)
