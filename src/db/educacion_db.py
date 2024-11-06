@@ -17,7 +17,6 @@ os.system("clear")
 pd.options.mode.copy_on_write = True
 
 # LAT y LONG de las comunidades
-
 GEO_COM = Path("data/listado-longitud-latitud-municipios-espana.xls")
 GEO_MAX = Path("data/coords_max.csv")
 GEO_MIN = Path("data/coords_min.csv")
@@ -112,25 +111,34 @@ def normalize_data(sf: Series) -> dict:
     #     print(ind, sf.loc[ind], type(sf.loc[ind]), sep=" : ")
 
 
-conn = MongoDBConnect(container_name="mongo-tfm", database="tfm-data")
-col = conn.collection(
-    name="education",
-    mode="create",
-    # delete=True,
-)
-
-
 CENTROS = Path("../scrapy_data/spiders/data/centros_educacion_info_final.csv")
-df = pd.read_csv(CENTROS, sep="\t")
-for i in range(df.shape[0]):
-    # document = df.iloc[i, :].to_dict()
-    print(f"{i} - ", end="")
-    document = normalize_data(df.iloc[i, :])
-    # pp(document)
-    # break
-    conn.insert(collection=col, data=document)
-    # if i == 2:
-    #     break
+CENTROS_FINAL = Path("data/centros_educacion.csv")
+if not CENTROS_FINAL.exists():
+    df = pd.read_csv(CENTROS, sep="\t")
+    for i in range(df.shape[0]):
+        # document = df.iloc[i, :].to_dict()
+        print(f"{i} - ", end="")
+        document = normalize_data(df.iloc[i, :])
+        if i == 0:
+            df_final = pd.DataFrame.from_dict(document, orient="index").T
+        elif i > 0:
+            new_row = pd.DataFrame.from_dict(document, orient="index").T
+            df_final = pd.concat([df_final, new_row])
 
-# conn.db_manage(list_collections=True)
-conn.close()
+    df_final.to_csv(CENTROS_FINAL, index=False, sep="\t")
+
+
+if CENTROS_FINAL.exists:
+    conn = MongoDBConnect(container_name="mongo-tfm", database="tfm-data")
+    col = conn.collection(
+        name="education",
+        mode="create",
+        # delete=True,
+    )
+    df_tmp = pd.read_csv(CENTROS, sep="\t")
+    for j in range(df_tmp.shape[0]):
+        document = df_tmp.iloc[i, :].to_dict()
+        conn.insert(collection=col, data=document)
+
+    conn.db_manage(list_collections=True)
+    conn.close()
