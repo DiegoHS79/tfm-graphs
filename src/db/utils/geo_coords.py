@@ -61,8 +61,8 @@ def get_coordinates(
 #         return get_coordinates_3(direction)
 
 
-def get_coordinates_3(direction: str) -> list[int]:
-    nom = ArcGIS()
-    location = nom.geocode(direction, exactly_one=False)[0]
+# def get_coordinates_3(direction: str) -> list[int]:
+#     nom = ArcGIS()
+#     location = nom.geocode(direction, exactly_one=False)[0]
 
-    return location.latitude, location.longitude
+#     return location.latitude, location.longitude
