@@ -39,29 +39,21 @@ else:
 
 
 def normalize_data(sf: Series) -> dict:
-    direction = sf.loc["dirección"].lower()
-    prov = sf.loc["provincia"].lower()
+    direction = sf.loc["Domicilio"].lower()
+    prov = sf.loc["Provincia"].lower()
 
-    if prov == "coruña (a)":
+    if prov == "coruña, a":
         prov = "a coruña"
-    elif prov == "araba/álava":
-        prov = "álava"
-    elif prov == "rioja (la)":
+    elif prov == "rioja, la":
         prov = "la rioja"
-    elif prov == "palmas (las)":
-        prov = "las palmas"
+    elif prov in ["sta.cruz tenerife", "s/c tenerife"]:
+        prov = "santa cruz de tenerife"
     elif prov == "alicante":
         prov = "alicante/alacant"
-    elif prov == "castellón / castelló":
+    elif prov == "castellón":
         prov = "castellón/castelló"
-    elif prov == "valencia / valència":
+    elif prov in ["valencia/valéncia", "valencia"]:
         prov = "valencia/valència"
-    elif prov == "balears (illes)":
-        prov = "illes balears"
-    elif prov == "bizkaia":
-        prov = "vizcaya"
-    elif prov == "gipuzkoa":
-        prov = "guipúzcoa"
 
     max_coor = df_max.loc[[prov]].to_dict()
     min_coor = df_min.loc[[prov]].to_dict()
@@ -69,38 +61,37 @@ def normalize_data(sf: Series) -> dict:
     lon_edges = (max_coor["Longitud"][prov], min_coor["Longitud"][prov])
 
     print("-" * 100)
-    cp = str(int(sf.loc["c.p."])).zfill(5)
-    direction = f"{direction}, {sf.loc['municipio']}, {cp}, ({prov})"
-    lat = ast.literal_eval(sf.loc["latitud"].replace(",", "."))
-    long = ast.literal_eval(sf.loc["longitud (wgs84)"].replace(",", "."))
+    tel = sf.loc["Teléfono"]
+    if "-" in str(tel):
+        tel = tel.split("-")[0]
 
-    if (
-        lat > ceil(lat_edges[0])
-        or lat < floor(lat_edges[1])
-        or long > ceil(lon_edges[0])
-        or long < floor(lon_edges[1])
-    ):
-        print(f"\tdireccion: {direction}")
-        resp = get_coordinates(direction, lat_edges=lat_edges, long_edges=lon_edges)
+    if tel is not np.nan:
+        sf.loc["Teléfono"] = ast.literal_eval(tel.strip().replace(" ", ""))
 
-        print(f"INFO - nuevas coordenadas: {resp}")
+    try:
+        cp = str(int(sf.loc["cp"])).zfill(5)
+        direction = f"{direction}, {sf.loc['city'].lower()}, {cp}, ({prov})"
+    except ValueError as e:
+        print(e)
+        direction = f"{direction}, {sf.loc['city'].lower()}, ({prov})"
 
-        sf.loc["latitud"] = resp[0]
-        sf.loc["longitud (wgs84)"] = resp[1]
+    print(f"\tdireccion: {direction}")
+    resp = get_coordinates(direction, lat_edges=lat_edges, long_edges=lon_edges)
 
-        time.sleep(1.5 + random.random())
-    else:
-        print("INFO - No hace faltan calcular nuevas coordenadas.")
+    print(f"INFO - nuevas coordenadas: {resp}")
 
-    sf.rename({"longitud (wgs84)": "longitud"}, inplace=True)
+    sf.loc["latitud"] = resp[0]
+    sf.loc["longitud"] = resp[1]
+
+    time.sleep(1.5 + random.random())
 
     return sf.to_dict()
 
 
-GASOLINERAS = Path("../scrapy_data/spiders/data/gasolineras_v1.csv")
-GASOLINERAS_FINAL = Path("data/gasolineras.csv")
-if not GASOLINERAS_FINAL.exists():
-    df = pd.read_csv(GASOLINERAS, sep="\t")
+PUESTOS = Path("../scrapy_data/spiders/data/puestos_gc_final.csv")
+PUESTOS_FINAL = Path("data/puestos_gc.csv")
+if not PUESTOS_FINAL.exists():
+    df = pd.read_csv(PUESTOS, sep="\t")
     for i in range(df.shape[0]):
         print(f"{i} - ", end="")
         document = normalize_data(df.iloc[i, :])
@@ -111,17 +102,17 @@ if not GASOLINERAS_FINAL.exists():
             new_row = pd.DataFrame.from_dict(document, orient="index").T
             df_final = pd.concat([df_final, new_row])
 
-    df_final.to_csv(GASOLINERAS_FINAL, index=False, sep="\t")
+    df_final.to_csv(PUESTOS_FINAL, index=False, sep="\t")
 
 
-if GASOLINERAS_FINAL.exists:
+if PUESTOS_FINAL.exists:
     conn = MongoDBConnect(container_name="mongo-tfm", database="tfm-data")
     col = conn.collection(
-        name="gasolineras",
+        name="puestos_gc",
         mode="create",
         # delete=True,
     )
-    df_tmp = pd.read_csv(GASOLINERAS_FINAL, sep="\t")
+    df_tmp = pd.read_csv(PUESTOS_FINAL, sep="\t")
     for j in range(df_tmp.shape[0]):
         document = df_tmp.iloc[j, :].to_dict()
         conn.insert(collection=col, data=document)
