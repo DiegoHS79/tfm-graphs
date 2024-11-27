@@ -14,7 +14,7 @@ def get_coordinates(
     direction: str,
     lat_edges: tuple[float],
     long_edges: tuple[float],
-) -> tuple[Location] | list[int]:
+) -> tuple[Location] | list[int] | None:
     run_arcgis = False
     geolocator = Photon(user_agent=get_user_agent(), timeout=60)
     location = geolocator.geocode(direction)
@@ -35,7 +35,13 @@ def get_coordinates(
         print(f"\tlimites provinciales (longitud): {long_edges}")
         print(f"\tlanzando ArcGIS.")
         nom = ArcGIS()
-        locations = nom.geocode(direction, exactly_one=False)
+        try:
+            locations = nom.geocode(direction, exactly_one=False)
+        except Exception as e:
+            locations = None
+
+        if not locations:
+            return None
 
         for location in locations:
             if (
