@@ -159,7 +159,7 @@ proxies = df_prox.ip.apply(lambda x: x + ":") + df_prox.port.astype("str")
 
 if 1:
     for i in range(43):
-        if i in [0]:
+        if i in [0, 1]:
             continue
         EMPRESAS_CSV = Path(f"data/empresas/empresas_{i}.csv")
         df_urls = pd.read_csv(EMPRESAS_CSV, sep="\t")

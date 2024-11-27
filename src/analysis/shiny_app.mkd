@@ -1,0 +1,227 @@
+# install requiremetns:
+```
+pip install shiny
+pip install shinywidgets
+pip install shinylive
+```
+create site:
+```
+shiny create
+
+? Which template would you like to use? Navigating multiple pages/panels
+… Creating Navigating multiple pages/panels Shiny app...
+? Enter destination directory: ./app
+? Would you like to use Shiny Express? Yes
+✓ Created Shiny app at app
+
+→ Next steps:
+- Install required dependencies:
+    cd app
+    pip install -r requirements.txt
+- Open and edit the app file: app/app.py
+- Run the app with `shiny run app.py`.
+
+ℹ Just getting started with Shiny?
+→ Learn more at https://shiny.posit.co/py/docs/user-interfaces.html
+```
+run trial application
+```
+shiny run app/app.py
+
+INFO:     Started server process [1353]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+```
+
+# Shiny Express
+Shiny Express executes your `app.py` file in interactive mode, which automatically calls `sys.displayhook()` on each expression. Lower-level function `sys.displayhook` is designed to be overridden by frameworks like *Shiny*.
+
+### Functions in interactive mode
+
+One important aspect of interactive mode is that only top-level expressions are printed. If you define a function in interactive mode, the expressions that make it up are not automatically printed. You could fix this by calling sys.displayhook on each UI element:
+```
+import sys
+from shiny.express import ui
+
+def person(name, years):
+    with ui.card(class_="mt-3"):
+        sys.displayhook(ui.h3(name))
+        sys.displayhook(years)
+
+person("Socrates", "470-399 BC")
+```
+OK, it works, but that’s pretty gross. Is there a better way to fix this problem? Solution: @expressify decorator:
+```
+from shiny.express import expressify, ui
+
+@expressify
+def person(name, years):
+    with ui.card(class_="mt-3"):
+        ui.h3(name)
+        years
+
+person("Socrates", "470-399 BC")
+```
+
+### Collect UI code into a variable
+Sometimes we have a need to generate UI for some purpose other than directly displaying it. For example, we might want to save it to be displayed later, or multiple times.
+
+In the examples above, we’re using with `ui.card():`
+```
+from shiny.express import expressify, ui
+
+with ui.card(class_="mt-3") as x:
+    ui.h3("Socrates")
+    "470-399 BC"
+
+x
+x
+x
+```
+It looks for a moment like it worked, but no, it didn’t; instead of displaying the card three times, it displayed it once. Solution: `ui.hold()` context manager:
+```
+from shiny.express import expressify, ui
+
+with ui.hold() as x:
+    with ui.card(class_="mt-3"):
+        ui.h3("Socrates")
+        "470-399 BC"
+
+x
+x
+x
+```
+
+### Reactively rendering UI
+We can do this in Shiny Express by using the @render.ui decorator, which expects a function that returns a UI object. We can combine `@expressify` and `ui.hold()` to make this work. (Spoiler alert: we’re just setting up a strawman solution here, we’ll get to the “right” way in a moment.)
+```
+from shiny.express import expressify, input, render, ui
+
+ui.input_text("name", "Name", "Socrates")
+ui.input_text("years", "Years", "470-399 BC")
+
+@render.ui
+@expressify
+def person():
+    with ui.hold() as result:
+        with ui.card(class_="mt-3"):
+            ui.h3(input.name())
+            input.years()
+    return result
+```
+Solution: `@render.express` decorator:
+The `@render.express` decorator is a shorthand for that combination of `@render.ui + @expressify + ui.hold`. You can just think of it as “reactively render a chunk of Express code”:
+```
+from shiny.express import expressify, input, render, ui
+
+ui.input_text("name", "Name", "Socrates")
+ui.input_text("years", "Years", "470-399 BC")
+
+@render.express
+def person():
+    with ui.card(class_="mt-3"):
+        ui.h3(input.name())
+        input.years()
+```
+
+### Display causes a TypeError
+When Express currently raises an error when attempting to display an object that is not a valid UI object. This can surface in suprising ways, for example, when calling a function to perform a side-effect (like logging) which returns an unknown class of object.
+```
+from shiny.express import session
+
+session.on_ended(lambda: "Session ended!")
+```
+Output:
+```
+TypeError: Invalid tag item type: <class 'function'>. Consider calling str() on this value before treating it as a tag item.
+```
+
+Solution: Assign to a variable. In Express, you can assign the result of a function call to a variable to prevent displaying it, so you can use it to work around this issue:
+```
+from shiny.express import session
+
+_ = session.on_ended(lambda: "Session ended!")
+```
+
+## Shared objects
+For better performance, it’s often useful to have some code run once when the app initializes, not every time a new connection (i.e., session) is made. All of the code in a Shiny Express app.py file is re-executed every time a new connection is made, so it’s not a good place to do expensive work that only needs to be done once.
+
+
+
+# Sessions
+
+[Sessions](https://shiny.posit.co/py/docs/express-in-depth.html#sessions).
+
+# Modules
+
+Writing modules in Shiny is the best strategy for organizing a large Shiny code base. With modules, you can break your application into small pieces that can be reasoned about separately and composed to build larger applications.
+
+### Functions
+
+Let’s imagine you had a bunch of sliders which mostly had the same values:
+```
+from shiny.express import ui
+
+ui.input_slider("n1", "N", 0, 100, 20)
+ui.input_slider("n2", "N", 0, 100, 20)
+ui.input_slider("n3", "N", 0, 100, 20)
+ui.input_slider("n4", "N", 0, 100, 20)
+ui.input_slider("n5", "N", 0, 100, 20)
+ui.input_slider("n6", "N", 0, 100, 20)
+```
+A simple function cleans up your code, but still requires multiple calls to that function:
+```
+from shiny.express import ui
+
+def my_slider(id):
+    return ui.input_slider(id, "N", 0, 100, 20)
+
+my_slider("n1")
+my_slider("n2")
+my_slider("n3")
+my_slider("n4")
+my_slider("n5")
+```
+It has two main problems. 
+
+* First, while we’re able to use locally scoped variables within the function, each input or output ID needs to be unique across the entire Shiny application.
+
+    ```
+    from shiny.express import expressify, input, render, module, ui
+
+    @expressify
+    def io_row():
+        with ui.layout_columns():
+            ui.input_text("text_input", "Enter text")
+
+            @render.text
+            def text_output():
+                return f'You entered "{input.text_input()}"'
+
+    io_row()
+    ```
+
+    The `io_row()` function works fine in this case, but if you try to use it more than once, your app will not render properly. The reason is that Shiny requires all IDs in the UI to be unique, and if we call this function more than once, there will be several elements with the `text_input` id and several elements with the `text_output` id. When that happens, Shiny doesn’t know how to connect particular inputs to particular outputs.
+
+Modules solve these problems by encapsulating both the UI and server logic in their own namespace.
+
+A module namespace can be thought of as a container for a module’s code, and helps to keep the module’s variables, functions, and classes separate from those in other modules. This separation prevents naming conflicts and makes the code easier to understand and manage. A namespace is a unique identifier that Shiny assigns to each instance of a module to keep its input and output IDs separate from the IDs of other instances and from the rest of the Shiny application.
+
+### [How to use modules](https://shiny.posit.co/py/docs/modules.html#how-to-use-modules)
+
+
+
+
+
+
+
+
+
+
+# Export the Shiny for Python application
+[shinylive](https://www.appsilon.com/post/shiny-for-python-shinylive).
+```
+shinylive export app site
+```
+
