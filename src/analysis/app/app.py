@@ -22,7 +22,7 @@ ccaa = {
         "almería",
     ],
     "Aragón": ["zaragoza", "teruel", "huesca"],
-    "Asturias": ["asturias"],
+    "Asturias, Principado de": ["asturias"],
     "Balears, Illes": ["balears (illes)"],
     "Canarias": ["santa cruz de tenerife", "palmas (las)"],
     "Cantabria": ["cantabria"],
@@ -151,7 +151,10 @@ with ui.nav_panel("Visualización"):  # pagina 1
 
                     val2 = elec[elec.ccaa == input.ccaa()].shape[0]
 
-                    return round(val1 / val2, 2)
+                    try:
+                        return round(val1 / val2, 2)
+                    except ZeroDivisionError as e:
+                        return val1
 
         with ui.card():
 
