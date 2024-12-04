@@ -1,20 +1,14 @@
-# import seaborn as sns
-
+from shiny import reactive
 from shiny.express import input, render, ui
+from shinywidgets import render_widget
 
-from plots import graph_plot
+from plots import graph_plot, sp_plot
 from shared import gaso, elec
 
-ui.page_opts(title="Shiny navigation components")
+ui.page_opts(title="Estudio de los Puntos de Recarga en España")
 
 ui.nav_spacer()  # Push the navbar items to the right
 
-# footer = ui.input_select(
-#     "var", "Select variable", choices=["bill_length_mm", "body_mass_g"]
-# )
-
-# with ui.sidebar():
-#     ui.input_slider("t", "Tamaño del plot", 1000, 2000, 1000)
 
 ccaa = {
     "Andalucía": [
@@ -63,6 +57,7 @@ ccaa = {
     "melilla": ["melilla"],
 }
 
+
 with ui.sidebar():
     ui.input_select(
         "ccaa",
@@ -91,25 +86,100 @@ with ui.sidebar():
         selected="Comunitat Valenciana",
     )
 
+    ui.input_radio_buttons(
+        "rbs",
+        "Elige un tipo de surtidor:",
+        {
+            "Gasolineras": "Gasolineras",
+            "Electrolineras": "Electrolineras",
+        },
+    )
+
+
 with ui.nav_panel("Visualización"):  # pagina 1
 
-    # ventana de plot y tabla
-    # with ui.navset_card_underline(id="contenido", title="Gasolineras y Electrolineras"):
+    with ui.layout_columns(col_widths=[4, 4, 4, 6, 6]):
 
-    #     with ui.nav_panel("Plot"):
-    # with ui.card():
+        with ui.card():
 
-    @render.plot  # (width=1000, height=1000)
-    # def plot():
-    #     return graph_plot(
-    #         gaso[
-    #             gaso.provincia.apply(
-    #                 lambda x: True if x in ccaa[input.ccaa()] else False
-    #             )
-    #         ]
-    #     )
-    def plot():
-        return graph_plot(elec[elec.ccaa == input.ccaa()])
+            with ui.value_box(
+                showcase=ui.HTML(
+                    '<img src="https://cdn-icons-png.flaticon.com/512/1946/1946245.png" width="60" height="60">'
+                )
+            ):
+                "Número de Gasolineras"
+
+                @render.ui
+                def out1():
+                    val = gaso[
+                        gaso.provincia.apply(
+                            lambda x: (True if x in ccaa[input.ccaa()] else False)
+                        )
+                    ].shape[0]
+
+                    return val
+
+        with ui.card():
+            with ui.value_box(
+                showcase=ui.HTML(
+                    '<img src="https://riberamovisse.consorcioeder.es/wp-content/uploads/2022/10/wind2.png" width="75" height="75">'
+                )
+            ):
+                "Número de Electrolineras"
+
+                @render.ui
+                def out2():
+                    val = elec[elec.ccaa == input.ccaa()].shape[0]
+
+                    return val
+
+        with ui.card():
+            with ui.value_box(
+                showcase=ui.HTML(
+                    '<img src="https://cdn-icons-png.flaticon.com/512/9588/9588758.png" width="60" height="60">'
+                )
+            ):
+                "Ratio Gasolineras vs. Electrolineras"
+
+                @render.ui
+                def out3():
+                    val1 = gaso[
+                        gaso.provincia.apply(
+                            lambda x: (True if x in ccaa[input.ccaa()] else False)
+                        )
+                    ].shape[0]
+
+                    val2 = elec[elec.ccaa == input.ccaa()].shape[0]
+
+                    return round(val1 / val2, 2)
+
+        with ui.card():
+
+            @render.express
+            def header():
+                ui.card_header(f"Mapa Interactivo de España ({input.rbs()})")
+
+            @render.ui
+            def plot_folium():
+                return sp_plot(gaso, elec, surtidor=input.rbs())
+
+        with ui.card(full_screen=True):
+
+            @render.express
+            def header2():
+                ui.card_header(f"Mapa de la Comunidad ({input.ccaa()})")
+
+            @render.plot(width=800, height=800)
+            def plot():
+                return graph_plot(
+                    gaso[
+                        gaso.provincia.apply(
+                            lambda x: True if x in ccaa[input.ccaa()] else False
+                        )
+                    ],
+                    elec[elec.ccaa == input.ccaa()],
+                    surtidor=input.rbs(),
+                )
 
 
 with ui.nav_panel("Análisis"):  # pagina 2
@@ -123,7 +193,11 @@ with ui.nav_panel("Datos"):  # pagina 3
 
             @render.data_frame
             def data_gaso():
-                return gaso
+                return gaso[
+                    gaso.provincia.apply(
+                        lambda x: True if x in ccaa[input.ccaa()] else False
+                    )
+                ]
 
         with ui.nav_panel("Electrolineras"):
 
