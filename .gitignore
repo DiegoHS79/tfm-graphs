@@ -162,7 +162,7 @@ cython_debug/
 #.idea/
 
 # LOCAL
-*.attrs
+# *.attrs
 *.xml
 *.json*
 *.csv
@@ -170,6 +170,13 @@ cython_debug/
 *.xlsx
 *.xls
 *.html
+*.cpg
+*.dbf
+*.prj
+*.shp
+*.shx
+*.qpj
+*.qix
 mysql
 mongo
 db.opt
