@@ -1,9 +1,19 @@
+from decimal import Decimal
+
 from shiny import reactive
 from shiny.express import input, render, ui
 from shinywidgets import render_widget
-
-from plots import graph_plot, sp_plot
-from shared import gaso, elec
+from plots import graph_plot, sp_plot, dot_density_plot, centrality_plot, random_plot
+from shared import (
+    gaso,
+    gaso_penin,
+    gaso_canar,
+    elec,
+    elec_penin,
+    elec_canar,
+    areas_espania,
+    areas_canarias,
+)
 
 ui.page_opts(title="Estudio de los Puntos de Recarga en España")
 
@@ -59,6 +69,10 @@ ccaa = {
 
 
 with ui.sidebar():
+    ui.HTML(
+        '<p style="font-size: 25px; font-weight: bold; text-decoration: underline;">Opciones</p>'
+    )
+
     ui.input_select(
         "ccaa",
         "Selecciona una CCAA:",
@@ -95,6 +109,103 @@ with ui.sidebar():
         },
     )
 
+    ui.HTML(
+        '<p style="font-size: 25px; font-weight: bold; text-decoration: underline;">Análisis</p>'
+    )
+
+    ui.HTML(
+        '<p style="font-size: 15px; font-weight: bold; text-decoration: underline;">Densidad de puntos</p>'
+    )
+
+    ui.input_select(
+        "map_type",
+        "Selecciona el tipo de mapa:",
+        {
+            "Distribución espacial": "Distribución espacial",
+            "Mapa de calor": "Mapa de calor",
+            "Densidad 'kernel'": "Densidad 'kernel'",
+            # "Densidad por CCAA": "Densidad por CCAA",
+        },
+        selected="Distribución espacial",
+    )
+
+    ui.input_radio_buttons(
+        "densidad",
+        "Densidad por CCAA:",
+        {
+            "si": "Mostrar",
+            "no": "Quitar",
+        },
+        selected="no",
+    )
+
+    ui.HTML(
+        '<p style="font-size: 15px; font-weight: bold; text-decoration: underline;">Centralidad y Aleatoriedad</p>'
+    )
+
+    ui.input_select(
+        "provs",
+        "Selecciona una Provincia:",
+        {
+            "albacete": "Albacete",
+            "alicante": "Alicante",
+            "almería": "Almería",
+            "araba/álava": "Álaba",
+            "asturias": "Asturias",
+            "ávila": "Ávila",
+            "badajoz": "Badajoz",
+            "balears (illes)": "Islas Baleares",
+            "barcelona": "Barcelona",
+            "bizkaia": "Vizcaya",
+            "burgos": "Burgos",
+            "cáceres": "Cáceres",
+            "cádiz": "Cádiz",
+            "cantabria": "Cantabria",
+            "castellón / castelló": "Castellón",
+            "ceuta": "Ceuta",
+            "ciudad real": "Ciudad Real",
+            "córdoba": "Córdoba",
+            "coruña (a)": "La Coruña",
+            "cuenca": "Cuenca",
+            "gipuzkoa": "Guipúzcoa",
+            "girona": "Gerona",
+            "granada": "Granada",
+            "guadalajara": "Guadalajara",
+            "huelva": "Huelva",
+            "huesca": "Huesca",
+            "jaén": "Jaén",
+            "león": "León",
+            "lleida": "Lérida",
+            "lugo": "Lugo",
+            "madrid": "Madrid",
+            "málaga": "Málaga",
+            "melilla": "Melilla",
+            "murcia": "Murcia",
+            "navarra": "Navarra",
+            "ourense": "Ourense",
+            "palencia": "Palencia",
+            "palmas (las)": "Las Palmas",
+            "pontevedra": "Pontevedra",
+            "rioja (la)": "La Rioja",
+            "salamanca": "Salamanca",
+            "santa cruz de tenerife": "Tenerife",
+            "segovia": "Segovia",
+            "sevilla": "Sevilla",
+            "soria": "Soria",
+            "tarragona": "Tarragona",
+            "teruel": "Teruel",
+            "toledo": "Toledo",
+            "valencia / valència": "Valencia",
+            "valladolid": "Valladolid",
+            "zamora": "Zamora",
+            "zaragoza": "Zaragoza",
+        },
+        selected="alicante",
+    )
+
+    ui.HTML(
+        '<p style="font-size: 15px; font-weight: bold; text-decoration: underline;">Agrupaciones</p>'
+    )
 
 with ui.nav_panel("Visualización"):  # pagina 1
 
@@ -112,7 +223,7 @@ with ui.nav_panel("Visualización"):  # pagina 1
                 @render.ui
                 def out1():
                     val = gaso[
-                        gaso.provincia.apply(
+                        gaso.province.apply(
                             lambda x: (True if x in ccaa[input.ccaa()] else False)
                         )
                     ].shape[0]
@@ -144,7 +255,7 @@ with ui.nav_panel("Visualización"):  # pagina 1
                 @render.ui
                 def out3():
                     val1 = gaso[
-                        gaso.provincia.apply(
+                        gaso.province.apply(
                             lambda x: (True if x in ccaa[input.ccaa()] else False)
                         )
                     ].shape[0]
@@ -176,17 +287,207 @@ with ui.nav_panel("Visualización"):  # pagina 1
             def plot():
                 return graph_plot(
                     gaso[
-                        gaso.provincia.apply(
+                        gaso.province.apply(
                             lambda x: True if x in ccaa[input.ccaa()] else False
                         )
                     ],
                     elec[elec.ccaa == input.ccaa()],
+                    areas_espania,
+                    areas_canarias,
                     surtidor=input.rbs(),
+                    ccaa=input.ccaa(),
                 )
 
 
 with ui.nav_panel("Análisis"):  # pagina 2
-    "This is the second 'page'."
+
+    with ui.navset_card_underline():
+
+        with ui.nav_panel("Densidad de puntos"):
+            # Espana y CCAA
+            with ui.layout_columns(col_widths=[6, 6, 7, 5]):
+                # Espana
+                with ui.card(full_screen=True):
+
+                    @render.express
+                    def header_sp():
+                        ui.card_header(f"Distribución de {input.rbs()} en la Península")
+
+                    @render.plot(width=950, height=900)
+                    def plot_sp_dist():
+                        dot_density_plot(
+                            gaso_penin,
+                            elec_penin,
+                            input.map_type(),
+                            surtidor=input.rbs(),
+                            zone="peninsula",
+                            area=areas_espania,
+                            densidad=input.densidad(),
+                        )
+
+                # CCAA
+                with ui.card(full_screen=True):
+
+                    @render.express
+                    def header_ccaa():
+                        ui.card_header(f"Distribución de la CCAA: {input.ccaa()}")
+
+                    @render.plot(width=800, height=800)
+                    def plot_ccaa_dist():
+                        return dot_density_plot(
+                            gaso[
+                                gaso.province.apply(
+                                    lambda x: True if x in ccaa[input.ccaa()] else False
+                                )
+                            ],
+                            elec[elec.ccaa == input.ccaa()],
+                            input.map_type(),
+                            surtidor=input.rbs(),
+                            zone="ccaa",
+                        )
+
+                # Canarias
+                with ui.card(full_screen=True):
+
+                    @render.express
+                    def header_can():
+                        ui.card_header(f"Distribución de {input.rbs()} en la Península")
+
+                    @render.plot()
+                    def plot_can_dist():
+                        dot_density_plot(
+                            gaso_canar,
+                            elec_canar,
+                            input.map_type(),
+                            surtidor=input.rbs(),
+                            zone="islas",
+                            area=areas_canarias,
+                            densidad=input.densidad(),
+                        )
+
+        with ui.nav_panel("Centralidad y Aleatoriedad"):
+            with ui.layout_columns(col_widths=[6, 6, 12]):
+                with ui.card(full_screen=True):
+
+                    @render.express
+                    def header_centro():
+                        ui.card_header(
+                            f"Centrografía por provincias: {input.provs().upper()}"
+                        )
+
+                    @render.plot(width=900, height=900)
+                    def plot_ccaa_entrality():
+                        return centrality_plot(
+                            gaso[gaso.province == input.provs()],
+                            elec[elec.province == input.provs()],
+                            areas_espania,
+                            areas_canarias,
+                            surtidor=input.rbs(),
+                            province=input.provs(),
+                        )
+
+                with ui.card(full_screen=True):
+
+                    @render.express
+                    def header_aleatorio():
+                        ui.card_header(
+                            f"Aleatoriedad por provincias: {input.provs().upper()}"
+                        )
+
+                    with ui.layout_columns(col_widths=[6, 6, 6, 6]):
+
+                        with ui.card(full_screen=True):
+
+                            @render.plot()
+                            def plot_random_g():
+                                qstat_g = random_plot(
+                                    gaso[gaso.province == input.provs()]
+                                )
+
+                                return qstat_g.plot(title="QStatistic - Gasolineras")
+
+                        with ui.card(full_screen=True):
+
+                            @render.plot()
+                            def plot_random_e():
+                                qstat_e = random_plot(
+                                    elec[elec.province == input.provs()]
+                                )
+
+                                return qstat_e.plot(title="QStatistic - Electrolineras")
+
+                        with ui.card(full_screen=True):
+
+                            @render.plot()
+                            def plot_random_a():
+                                qstat_r = random_plot(
+                                    gaso[gaso.province == input.provs()],
+                                    pattern=True,
+                                )
+
+                                return qstat_r.plot(
+                                    title="QStatistic - Muestra Aleatoria"
+                                )
+
+                        # Chi-square P-Value
+                        with ui.card(full_screen=True):
+                            with ui.layout_columns(col_widths=[12, 12, 12]):
+                                with ui.card():
+                                    with ui.value_box(
+                                        showcase=ui.HTML(
+                                            '<img src="https://cdn-icons-png.flaticon.com/512/1946/1946245.png" width="50" height="50">'
+                                        )
+                                    ):
+                                        "P-value basado en la chi-squared:"
+
+                                        @render.ui
+                                        def rand1():
+                                            qstat_g = random_plot(
+                                                gaso[gaso.province == input.provs()]
+                                            )
+                                            return f"{Decimal(qstat_g.chi2_pvalue):.2E}"
+
+                                with ui.card():
+                                    with ui.value_box(
+                                        showcase=ui.HTML(
+                                            '<img src="https://riberamovisse.consorcioeder.es/wp-content/uploads/2022/10/wind2.png" width="60" height="60">'
+                                        )
+                                    ):
+                                        "P-value basado en la chi-squared:"
+
+                                        @render.ui
+                                        def rand2():
+                                            qstat_e = random_plot(
+                                                elec[elec.province == input.provs()]
+                                            )
+                                            return f"{Decimal(qstat_e.chi2_pvalue):.2E}"
+
+                                with ui.card():
+                                    with ui.value_box(
+                                        showcase=ui.HTML(
+                                            '<img src="https://cdn-icons-png.flaticon.com/512/7101/7101743.png" width="50" height="50">'
+                                        )
+                                    ):
+                                        "P-value basado en la chi-squared:"
+
+                                        @render.ui
+                                        def rand3():
+                                            qstat_r = random_plot(
+                                                gaso[gaso.province == input.provs()],
+                                                pattern=True,
+                                            )
+                                            return f"{Decimal(qstat_r.chi2_pvalue):.2E}"
+
+                with ui.card(full_screen=True):
+
+                    @render.express
+                    def header_ripley():
+                        ui.card_header("Función G de Ripley")
+
+        with ui.nav_panel("Agrupaciones"):
+            "pruebas3"
+
+    # "This is the second 'page'."
 
 with ui.nav_panel("Datos"):  # pagina 3
 
@@ -197,7 +498,7 @@ with ui.nav_panel("Datos"):  # pagina 3
             @render.data_frame
             def data_gaso():
                 return gaso[
-                    gaso.provincia.apply(
+                    gaso.province.apply(
                         lambda x: True if x in ccaa[input.ccaa()] else False
                     )
                 ]
