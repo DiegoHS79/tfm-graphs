@@ -41,8 +41,7 @@ else:
 def normalize_data(sf: Series, prov_name: str) -> dict:
     # print(sf)
     prov = sf.loc[prov_name].lower()
-    # if prov == "balears, illes":
-    #     prov = "illes balears"
+
     # elif prov == "coruña, a":
     #     prov = "a coruña"
     # elif prov == "castellón":
@@ -59,6 +58,10 @@ def normalize_data(sf: Series, prov_name: str) -> dict:
         prov = "guipúzcoa"
     elif prov == "valencia":
         prov = "valencia/valència"
+    elif prov == "baleares":
+        prov = "illes balears"
+    elif prov == "malaga":
+        prov = "málaga"
 
     max_coor = df_max.loc[[prov]].to_dict()
     min_coor = df_min.loc[[prov]].to_dict()
@@ -109,7 +112,7 @@ def save_csv(df: pd.DataFrame, file_name: str) -> None:
 
 EMPRESAS_PARCIAL = Path("data/empresas_parcial.csv")
 for i in range(43):
-    if i in [0]:
+    if i in [0, 1]:
         continue
     EMPRESAS_FINAL = Path(f"data/empresas_{i}.csv")
     if not EMPRESAS_FINAL.exists():
@@ -155,6 +158,8 @@ for i in range(43):
         # break
 
     EMPRESAS_PARCIAL.unlink()
+
+    break
 
 # SANIDAD_URGE = Path("../scrapy_data/spiders/data/sns_urgente.csv")
 # SANIDAD_URGE_FINAL = Path("data/sanidad_urgente.csv")

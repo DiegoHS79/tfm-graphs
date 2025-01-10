@@ -1,6 +1,7 @@
+import random as rd
+
 import contextily as cx
 import folium as fl
-
 import geopandas as gpd
 import libpysal as psl
 import matplotlib.pyplot as plt
@@ -17,6 +18,36 @@ from pointpats import (
     random,
     PointPattern,
 )
+from sklearn.cluster import DBSCAN, KMeans
+from sklearn.metrics import silhouette_score
+
+
+colors = [
+    "black",
+    "grey",
+    "lightcoral",
+    "red",
+    "sienna",
+    "peru",
+    "orange",
+    "green",
+    "lime",
+    "springgreen",
+    "lightseagreen",
+    "gold",
+    "darkkhaki",
+    "aqua",
+    "teal",
+    "deepskyblue",
+    "royalblue",
+    "slateblue",
+    "darkviolet",
+    "magenta",
+    "deeppink",
+    "crimson",
+]
+
+rd.shuffle(colors)
 
 
 def graph_plot(
@@ -290,7 +321,7 @@ def centrality_plot(df, df2, area1, area2, surtidor="Gasolineras", province="ali
     return fig
 
 
-def random_plot(df, pattern=False, n=9):
+def random_plot(df, pattern=False, nx=9, ny=9):
     #! https://pysal.org/notebooks/explore/pointpats/Quadrat_statistics.html
     #! https://pysal.org/pointpats/_modules/pointpats/quadrat_statistics.html#QStatistic.plot
 
@@ -298,8 +329,172 @@ def random_plot(df, pattern=False, n=9):
     random_pattern = random.poisson(coordinates, size=len(coordinates))
 
     if pattern:
-        qstat = QStatistic(random_pattern, nx=n, ny=n)
+        qstat = QStatistic(random_pattern, nx=nx, ny=ny)
     else:
-        qstat = QStatistic(coordinates, nx=n, ny=n)
+        qstat = QStatistic(coordinates, nx=nx, ny=ny)
 
     return qstat
+
+
+def ripley_plot(df, df2, surtidor="Gasolineras"):
+    if surtidor == "Gasolineras":
+        df_sp = df
+    elif surtidor == "Electrolineras":
+        df_sp = df2
+
+    coordinates = df_sp[["longitude", "latitude"]].values
+    g_test = distance_statistics.g_test(coordinates, support=40, keep_simulations=True)
+
+    fig, ax = plt.subplots(1, 2, gridspec_kw=dict(width_ratios=(5, 5)))
+
+    # G function ------------------------------------------------------------------------
+    ax[0].plot(g_test.support, g_test.simulations.T, color="k", alpha=0.01)
+    # and show the average of simulations
+    ax[0].plot(
+        g_test.support,
+        np.median(g_test.simulations, axis=0),
+        color="cyan",
+        label="median simulation",
+    )
+
+    # and the observed pattern's G function
+    ax[0].plot(g_test.support, g_test.statistic, label="observed", color="red")
+
+    ax[0].set_xlabel("distance")
+    ax[0].set_ylabel("% of nearest neighbor\ndistances shorter")
+    ax[0].legend()
+    ax[0].set_xlim(0, 0.095)
+    ax[0].set_ylim(0, 1.01)
+    ax[0].set_title(r"Ripley's $G(d)$ function")
+
+    # F function ------------------------------------------------------------------------
+    f_test = distance_statistics.f_test(coordinates, support=40, keep_simulations=True)
+    ax[1].plot(f_test.support, f_test.simulations.T, color="k", alpha=0.01)
+    # and show the average of simulations
+    ax[1].plot(
+        f_test.support,
+        np.median(f_test.simulations, axis=0),
+        color="cyan",
+        label="median simulation",
+    )
+
+    # and the observed pattern's F function
+    ax[1].plot(f_test.support, f_test.statistic, label="observed", color="red")
+
+    ax[1].set_xlabel("distance")
+    ax[1].set_ylabel("% of nearest point in pattern\ndistances shorter")
+    ax[1].legend()
+    ax[1].set_xlim(0, 0.095)
+    ax[1].set_ylim(0, 1.01)
+    ax[1].set_title(r"Ripley's $F(d)$ function")
+
+    fig.tight_layout()
+
+    return fig
+
+
+def cluster_plot(
+    df,
+    df2,
+    area1,
+    area2,
+    groups=8,
+    surtidor="Gasolineras",
+    state_r=0,
+    province="alicante",
+):
+    if surtidor == "Gasolineras":
+        df_sp = df
+    elif surtidor == "Electrolineras":
+        df_sp = df2
+
+    if province in ["santa cruz de tenerife", "palmas (las)"]:
+        area = area2
+    else:
+        area = area1
+
+    clusterer = KMeans(
+        n_clusters=groups,
+        random_state=state_r,
+        n_init="auto",
+    )
+    clusterer.fit(df_sp[["latitude", "longitude"]])
+
+    df_prov = df_sp[["latitude", "longitude"]]
+    df_prov.loc[:, ["lavels"]] = clusterer.labels_
+
+    fig, ax = plt.subplots(1)
+
+    for k in df_prov.lavels.unique():
+        ax.scatter(
+            df_prov[df_prov["lavels"] == k].longitude,
+            df_prov[df_prov["lavels"] == k].latitude,
+            c=colors[k],
+            s=15,
+            linewidth=0,
+        )
+
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+
+    x_lim = ax.get_xlim()
+    y_lim = ax.get_ylim()
+
+    ax_aer = area.plot(ax=ax, facecolor="none", edgecolor="grey", linewidth=1.0)
+    ax_aer.set_xlim(x_lim)
+    ax_aer.set_ylim(y_lim)
+
+    cx.add_basemap(ax, crs="EPSG:4326", source=cx.providers.CartoDB.Voyager)
+
+    fig.tight_layout()
+
+    return fig
+
+
+def elbow_plot(df, df2, surtidor="Gasolineras"):
+    if surtidor == "Gasolineras":
+        df_sp = df
+    elif surtidor == "Electrolineras":
+        df_sp = df2
+
+    Sum_of_squared_distances = []
+    k_index = range(1, 22)
+    for num_clusters in k_index:
+        kmeans = KMeans(n_clusters=num_clusters)
+        kmeans.fit(df_sp[["latitude", "longitude"]])
+        Sum_of_squared_distances.append(kmeans.inertia_)
+
+    fig, ax = plt.subplots(1)
+
+    ax.plot(k_index, Sum_of_squared_distances, "bx-")
+    ax.grid(visible=True)
+    ax.set_xlabel("Valor de K")
+    ax.set_ylabel("Suma del cuadrado de las Distancias/Inercia")
+
+    return fig
+
+
+def silueta_plot(df, df2, surtidor="Gasolineras"):
+    if surtidor == "Gasolineras":
+        df_sp = df
+    elif surtidor == "Electrolineras":
+        df_sp = df2
+
+    silhouette_avg = []
+    s_range = range(2, 22)
+    for num_clusters in s_range:
+        kmeans = KMeans(n_clusters=num_clusters)
+        kmeans.fit(df_sp[["latitude", "longitude"]])
+        cluster_labels = kmeans.labels_
+        silhouette_avg.append(
+            silhouette_score(df_sp[["latitude", "longitude"]], cluster_labels)
+        )
+
+    fig, ax = plt.subplots(1)
+
+    ax.plot(s_range, silhouette_avg, "bx-")
+    ax.grid(visible=True)
+    ax.set_xlabel("Valor de K")
+    ax.set_ylabel("Puntuación de Silueta")
+
+    return fig

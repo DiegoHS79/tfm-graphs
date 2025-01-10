@@ -3,7 +3,17 @@ from decimal import Decimal
 from shiny import reactive
 from shiny.express import input, render, ui
 from shinywidgets import render_widget
-from plots import graph_plot, sp_plot, dot_density_plot, centrality_plot, random_plot
+from plots import (
+    graph_plot,
+    sp_plot,
+    dot_density_plot,
+    centrality_plot,
+    random_plot,
+    ripley_plot,
+    cluster_plot,
+    elbow_plot,
+    silueta_plot,
+)
 from shared import (
     gaso,
     gaso_penin,
@@ -203,9 +213,14 @@ with ui.sidebar():
         selected="alicante",
     )
 
+    ui.input_numeric("nx", "QStat Columnas:", 9, min=1, max=100)
+    ui.input_numeric("ny", "QStat Filas:", 9, min=1, max=100)
+
     ui.HTML(
         '<p style="font-size: 15px; font-weight: bold; text-decoration: underline;">Agrupaciones</p>'
     )
+
+    ui.input_numeric("nk", "Valor K:", 8, min=1, max=21)
 
 with ui.nav_panel("Visualización"):  # pagina 1
 
@@ -401,7 +416,9 @@ with ui.nav_panel("Análisis"):  # pagina 2
                             @render.plot()
                             def plot_random_g():
                                 qstat_g = random_plot(
-                                    gaso[gaso.province == input.provs()]
+                                    gaso[gaso.province == input.provs()],
+                                    nx=input.nx(),
+                                    ny=input.ny(),
                                 )
 
                                 return qstat_g.plot(title="QStatistic - Gasolineras")
@@ -411,7 +428,9 @@ with ui.nav_panel("Análisis"):  # pagina 2
                             @render.plot()
                             def plot_random_e():
                                 qstat_e = random_plot(
-                                    elec[elec.province == input.provs()]
+                                    elec[elec.province == input.provs()],
+                                    nx=input.nx(),
+                                    ny=input.ny(),
                                 )
 
                                 return qstat_e.plot(title="QStatistic - Electrolineras")
@@ -423,6 +442,8 @@ with ui.nav_panel("Análisis"):  # pagina 2
                                 qstat_r = random_plot(
                                     gaso[gaso.province == input.provs()],
                                     pattern=True,
+                                    nx=input.nx(),
+                                    ny=input.ny(),
                                 )
 
                                 return qstat_r.plot(
@@ -443,7 +464,9 @@ with ui.nav_panel("Análisis"):  # pagina 2
                                         @render.ui
                                         def rand1():
                                             qstat_g = random_plot(
-                                                gaso[gaso.province == input.provs()]
+                                                gaso[gaso.province == input.provs()],
+                                                nx=input.nx(),
+                                                ny=input.ny(),
                                             )
                                             return f"{Decimal(qstat_g.chi2_pvalue):.2E}"
 
@@ -458,7 +481,9 @@ with ui.nav_panel("Análisis"):  # pagina 2
                                         @render.ui
                                         def rand2():
                                             qstat_e = random_plot(
-                                                elec[elec.province == input.provs()]
+                                                elec[elec.province == input.provs()],
+                                                nx=input.nx(),
+                                                ny=input.ny(),
                                             )
                                             return f"{Decimal(qstat_e.chi2_pvalue):.2E}"
 
@@ -475,6 +500,8 @@ with ui.nav_panel("Análisis"):  # pagina 2
                                             qstat_r = random_plot(
                                                 gaso[gaso.province == input.provs()],
                                                 pattern=True,
+                                                nx=input.nx(),
+                                                ny=input.ny(),
                                             )
                                             return f"{Decimal(qstat_r.chi2_pvalue):.2E}"
 
@@ -482,12 +509,65 @@ with ui.nav_panel("Análisis"):  # pagina 2
 
                     @render.express
                     def header_ripley():
-                        ui.card_header("Función G de Ripley")
+                        ui.card_header("Funciones de Ripley")
+
+                    @render.plot()
+                    def plot_ripley():
+                        return ripley_plot(
+                            gaso[gaso.province == input.provs()],
+                            elec[elec.province == input.provs()],
+                            surtidor=input.rbs(),
+                        )
 
         with ui.nav_panel("Agrupaciones"):
-            "pruebas3"
+            with ui.layout_columns(col_widths=[7, 5]):
+                with ui.card(full_screen=True):
 
-    # "This is the second 'page'."
+                    @render.express
+                    def header_cluster():
+                        ui.card_header(f"Agrupaciones de {input.rbs()}")
+
+                    @render.plot(width=1100, height=1100)
+                    def plot_cluster():
+                        return cluster_plot(
+                            gaso[gaso.province == input.provs()],
+                            elec[elec.province == input.provs()],
+                            areas_espania,
+                            areas_canarias,
+                            surtidor=input.rbs(),
+                            groups=input.nk(),
+                        )
+
+                with ui.card():
+                    with ui.layout_columns(col_widths=[12, 12]):
+                        with ui.card(full_screen=True):
+
+                            @render.express
+                            def header_elbow():
+                                ui.card_header("Método Elbow")
+
+                            @render.plot(width=700, height=600)
+                            def plot_cluster_elbow():
+                                return elbow_plot(
+                                    gaso[gaso.province == input.provs()],
+                                    elec[elec.province == input.provs()],
+                                    surtidor=input.rbs(),
+                                )
+
+                        with ui.card(full_screen=True):
+
+                            @render.express
+                            def header_silueta():
+                                ui.card_header("Análisis de la silueta")
+
+                            @render.plot(width=700, height=600)
+                            def plot_cluster_silueta():
+                                return silueta_plot(
+                                    gaso[gaso.province == input.provs()],
+                                    elec[elec.province == input.provs()],
+                                    surtidor=input.rbs(),
+                                )
+
 
 with ui.nav_panel("Datos"):  # pagina 3
 
